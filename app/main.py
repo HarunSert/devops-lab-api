@@ -26,7 +26,8 @@ def root():
         "application": os.getenv("APP_NAME", "devops-lab-api"),
         "environment": os.getenv("APP_ENV", "development"),
         "version": os.getenv("APP_VERSION", "development"),
-        "status": "running"
+        "status": "running",
+        "message": "DevOps CI/CD pipeline is running"
     }
 
 
