@@ -3,5 +3,4 @@
 __pycache__
 .pytest_cache
 *.pyc
-tests
 README.md

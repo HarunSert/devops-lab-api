@@ -30,7 +30,7 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    if (!(env.VERSION ==~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/)) {
+                    if (!(env.VERSION ==~ /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
                         error(
                             "Invalid release tag: ${env.VERSION}. " +
                             "Expected semantic version format: 1.10.5"
@@ -43,6 +43,20 @@ pipeline {
             }
         }
 
+        stage('Branch Build') {
+            when {
+                not {
+                    buildingTag()
+                }
+            }
+
+            steps {
+                echo "Branch build detected."
+                echo "Release image will NOT be published."
+                echo "Kubernetes deployment will NOT be updated."
+            }
+        }
+
         stage('Run Tests') {
             when {
                 buildingTag()
@@ -50,14 +64,10 @@ pipeline {
 
             steps {
                 sh '''
-                    docker run --rm \
-                      -v "$WORKSPACE:/workspace" \
-                      -w /workspace \
-                      python:3.13-slim \
-                      sh -c '
-                        pip install --no-cache-dir -r requirements.txt &&
-                        pytest -v
-                      '
+                    docker build \
+                      --pull \
+                      --target test \
+                      -t ${IMAGE_REPOSITORY}:test-${BUILD_NUMBER} .
                 '''
             }
         }
@@ -70,7 +80,7 @@ pipeline {
             steps {
                 sh '''
                     docker build \
-                      --pull \
+                      --target runtime \
                       -t ${IMAGE_REPOSITORY}:${VERSION} .
                 '''
             }
@@ -89,7 +99,6 @@ pipeline {
                         passwordVariable: 'DOCKER_TOKEN'
                     )
                 ]) {
-
                     sh '''
                         echo "$DOCKER_TOKEN" | \
                         docker login \
@@ -173,16 +182,29 @@ pipeline {
     }
 
     post {
+
         always {
-            sh 'docker logout || true'
+            sh '''
+                docker logout || true
+
+                docker image rm \
+                  ${IMAGE_REPOSITORY}:test-${BUILD_NUMBER} \
+                  2>/dev/null || true
+
+                if [ -n "${VERSION:-}" ]; then
+                    docker image rm \
+                      ${IMAGE_REPOSITORY}:${VERSION} \
+                      2>/dev/null || true
+                fi
+            '''
         }
 
         success {
-            echo "Release pipeline completed successfully."
+            echo "Pipeline completed successfully."
         }
 
         failure {
-            echo "Release pipeline failed."
+            echo "Pipeline failed."
         }
     }
 }
